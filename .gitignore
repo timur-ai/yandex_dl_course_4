@@ -1,0 +1,17 @@
+# Ignore everything
+/*
+
+# Allow only these files at repo root
+!/.gitignore
+!/.python-version
+!/download_dataset.txt
+!/pyproject.toml
+!/README.md
+!/notebook.ipynb
+!/scripts/
+
+# Python cache/bytecode and notebook junk
+__pycache__/
+*.py[cod]
+*$py.class
+.ipynb_checkpoints/

@@ -1,0 +1,12 @@
+# 1. Save the public link
+url="https://disk.yandex.ru/d/kz9g5msVqtahiw"
+
+# 2. Get a direct download link
+direct_url=$(curl -s "https://cloud-api.yandex.net/v1/disk/public/resources/download?public_key=$url" \
+  | jq -r '.href')
+
+# 3. Download the file
+wget -O ogyeiv2.zip "$direct_url"
+
+# 4. Unzip the file
+unzip ogyeiv2.zip

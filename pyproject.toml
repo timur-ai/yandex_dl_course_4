@@ -1,0 +1,18 @@
+[project]
+name = "yandex-dl-course-4"
+version = "0.1.0"
+description = "Neural network estimating dish calories from image and ingredients (MAE<50)."
+readme = "README.md"
+requires-python = ">=3.10.12"
+dependencies = [
+    "ipywidgets>=8.1.7",
+    "matplotlib>=3.10.6",
+    "notebook>=7.4.6",
+    "numpy>=2.2.6",
+    "pandas>=2.3.2",
+    "pillow>=11.3.0",
+    "scikit-learn>=1.7.2",
+    "timm>=1.0.20",
+    "torch>=2.8.0",
+    "tqdm>=4.67.1",
+]
