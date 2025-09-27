@@ -9,6 +9,7 @@ import torch.nn as nn
 import timm
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 from tqdm.auto import tqdm  # adaptive tqdm: picks notebook widget or console automatically
+import torch.nn.functional as F
 
 
 def seed_everything(seed: int) -> None:
@@ -267,4 +268,126 @@ def validate_fusion(
         True,
     )
 
+
+
+def _pos(x: torch.Tensor) -> torch.Tensor:
+    return F.softplus(x)
+
+
+def train_one_epoch_density(
+    model: nn.Module,
+    feature_extractor: nn.Module,
+    dataloader: torch.utils.data.DataLoader,
+    criterion: nn.Module,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    amp_enabled: bool = False,
+    max_grad_norm: float | None = None,
+    max_batches: int | None = None,
+    fusion: bool = False,
+) -> float:
+    model.train()
+    feature_extractor.train()
+    amp_enabled = bool(amp_enabled and (device.type == "cuda"))
+    loss_sum = 0.0
+    scaler = torch.amp.GradScaler("cuda", enabled=amp_enabled)
+
+    for batch_idx, batch in enumerate(
+        tqdm(
+            dataloader,
+            desc="train_density",
+            leave=True,
+            dynamic_ncols=True,
+        )
+    ):
+        if fusion:
+            images, targets, tfidf_vecs, mass, _ = batch
+        else:
+            images, targets, mass, _ = batch
+
+        images = images.to(device, non_blocking=True)
+        targets = targets.to(device)
+        mass = mass.to(device)
+        optimizer.zero_grad(set_to_none=True)
+        with torch.amp.autocast("cuda", enabled=amp_enabled):
+            img_feats = feature_extractor(images)
+            if fusion:
+                tfidf_vecs_t = torch.as_tensor(
+                    tfidf_vecs, dtype=torch.float32, device=device
+                )
+                density = model(img_feats, tfidf_vecs_t)
+            else:
+                density = model(img_feats)
+            preds = _pos(density) * (mass / 100.0)
+            loss = criterion(preds, targets)
+        scaler.scale(loss).backward()
+        if max_grad_norm is not None:
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
+        scaler.step(optimizer)
+        scaler.update()
+        loss_sum += float(loss.item()) * images.size(0)
+        if (max_batches is not None) and (batch_idx + 1 >= max_batches):
+            break
+    return loss_sum / len(dataloader.dataset)
+
+
+@torch.no_grad()
+def validate_density(
+    model: nn.Module,
+    feature_extractor: nn.Module,
+    dataloader: torch.utils.data.DataLoader,
+    criterion: nn.Module,
+    device: torch.device,
+    max_batches: int | None = None,
+    fusion: bool = False,
+    tta: bool = True,
+) -> tuple[float, dict[str, float]]:
+    model.eval()
+    feature_extractor.eval()
+    loss_sum = 0.0
+    all_true: list[float] = []
+    all_pred: list[float] = []
+    for batch_idx, batch in enumerate(
+        tqdm(
+            dataloader,
+            desc="validate_density",
+            leave=True,
+            dynamic_ncols=True,
+        )
+    ):
+        if fusion:
+            images, targets, tfidf_vecs, mass, _ = batch
+        else:
+            images, targets, mass, _ = batch
+
+        images = images.to(device, non_blocking=True)
+        targets = targets.to(device)
+        mass = mass.to(device)
+        img_feats = feature_extractor(images)
+        if fusion:
+            tfidf_vecs_t = torch.as_tensor(
+                tfidf_vecs, dtype=torch.float32, device=device
+            )
+            density = model(img_feats, tfidf_vecs_t)
+        else:
+            density = model(img_feats)
+        if tta:
+            images_f = torch.flip(images, dims=[3])
+            feats_f = feature_extractor(images_f)
+            if fusion:
+                density_f = model(feats_f, tfidf_vecs_t)
+            else:
+                density_f = model(feats_f)
+            density = 0.5 * (density + density_f)
+        preds = _pos(density) * (mass / 100.0)
+        loss = criterion(preds, targets)
+        loss_sum += float(loss.item()) * images.size(0)
+        all_true.extend(targets.detach().cpu().numpy().tolist())
+        all_pred.extend(preds.detach().cpu().numpy().tolist())
+        if (max_batches is not None) and (batch_idx + 1 >= max_batches):
+            break
+    val_loss = loss_sum / len(dataloader.dataset)
+    metrics = evaluate_metrics(np.asarray(all_true), np.asarray(all_pred))
+    return val_loss, metrics
 

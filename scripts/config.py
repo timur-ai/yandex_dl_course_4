@@ -71,8 +71,8 @@ class Config:
     num_workers: int = 4
     pin_memory: bool = True
     persistent_workers: bool = True
-    batch_size: int = 32
-    epochs: int = 10
+    batch_size: int = 24
+    epochs: int = 20
     learning_rate: float = 2e-4
     weight_decay: float = 1e-4
     grad_clip_norm: float | None = None
@@ -85,8 +85,8 @@ class Config:
     dev_max_val_batches: int = 4
 
     # Model
-    backbone: str = "tf_efficientnet_b0"
-    image_size: int = 224
+    backbone: str = "tf_efficientnet_b3"
+    image_size: int = 300
 
     # TF-IDF
     tfidf_min_df: int = 2

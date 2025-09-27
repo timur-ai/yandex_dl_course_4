@@ -147,3 +147,94 @@ class FusionDataset(Dataset[tuple[torch.Tensor, torch.Tensor, np.ndarray, str]])
         return image, target_tensor, tfidf_vec, dish_id
 
 
+# Mass-aware variants returning total_mass alongside features
+class ImageDatasetMass(Dataset[tuple[torch.Tensor, torch.Tensor, torch.Tensor, str]]):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        images_dir: Path,
+        transform: Any,
+        dish_id_col: str = "dish_id",
+        target_col: str = "total_calories",
+        mass_col: str = "total_mass",
+        image_name: str = "rgb.png",
+    ) -> None:
+        self.df = df.reset_index(drop=True)
+        self.images_dir = Path(images_dir)
+        self.transform = transform
+        self.dish_id_col = dish_id_col
+        self.target_col = target_col
+        self.mass_col = mass_col
+        self.image_name = image_name
+
+    def __len__(self) -> int:  # noqa: D401
+        return len(self.df)
+
+    def __getitem__(self, index: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, str]:
+        row = self.df.iloc[index]
+        dish_id = str(row[self.dish_id_col])
+        target = float(row[self.target_col])
+        mass = float(row[self.mass_col])
+        img_path = self.images_dir / str(dish_id) / self.image_name
+        image = Image.open(img_path).convert("RGB")
+        image = self.transform(image)
+        return (
+            image,
+            torch.tensor(target, dtype=torch.float32),
+            torch.tensor(mass, dtype=torch.float32),
+            dish_id,
+        )
+
+
+class FusionDatasetMass(
+    Dataset[tuple[torch.Tensor, torch.Tensor, np.ndarray, torch.Tensor, str]]
+):
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        images_dir: Path,
+        transform: Any,
+        tfidf_matrix: Any,
+        id_to_row: dict[str, int],
+        dish_id_col: str = "dish_id",
+        target_col: str = "total_calories",
+        mass_col: str = "total_mass",
+        image_name: str = "rgb.png",
+    ) -> None:
+        self.df = df.reset_index(drop=True)
+        self.images_dir = Path(images_dir)
+        self.transform = transform
+        self.tfidf_matrix = tfidf_matrix
+        self.id_to_row = id_to_row
+        self.dish_id_col = dish_id_col
+        self.target_col = target_col
+        self.mass_col = mass_col
+        self.image_name = image_name
+
+    def __len__(self) -> int:  # noqa: D401
+        return len(self.df)
+
+    def __getitem__(
+        self, index: int
+    ) -> tuple[torch.Tensor, torch.Tensor, np.ndarray, torch.Tensor, str]:
+        row = self.df.iloc[index]
+        dish_id = str(row[self.dish_id_col])
+        target = float(row[self.target_col])
+        mass = float(row[self.mass_col])
+        img_path = self.images_dir / str(dish_id) / self.image_name
+        image = Image.open(img_path).convert("RGB")
+        image = self.transform(image)
+        row_idx = self.id_to_row[dish_id]
+        getrow = getattr(self.tfidf_matrix, "getrow", None)
+        if getrow is not None:
+            tfidf_vec = getrow(row_idx).toarray().ravel()
+        else:
+            tfidf_vec = np.asarray(self.tfidf_matrix[row_idx]).ravel()
+        return (
+            image,
+            torch.tensor(target, dtype=torch.float32),
+            tfidf_vec,
+            torch.tensor(mass, dtype=torch.float32),
+            dish_id,
+        )
+
