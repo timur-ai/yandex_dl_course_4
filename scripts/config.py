@@ -72,11 +72,15 @@ class Config:
     pin_memory: bool = True
     persistent_workers: bool = True
     batch_size: int = 24
-    epochs: int = 20
-    learning_rate: float = 2e-4
-    weight_decay: float = 1e-4
-    grad_clip_norm: float | None = None
+    epochs: int = 30
+    learning_rate: float = 1e-4
+    weight_decay: float = 5e-5
+    grad_clip_norm: float | None = 1.0
     compile: bool = False
+
+    # Scheduler / training control
+    scheduler_eta_min: float = 1e-6
+    warmup_epochs: int = 4
 
     # Development mode (quick passes for correctness checks)
     dev_mode: bool = False
@@ -89,11 +93,19 @@ class Config:
     image_size: int = 300
 
     # TF-IDF
-    tfidf_min_df: int = 2
-    tfidf_max_df: float = 0.95
-    tfidf_max_features: int = 10000
+    tfidf_min_df: int = 1
+    tfidf_max_df: float = 0.99
+    tfidf_max_features: int = 20000
+    tfidf_ngram_max: int = 2
     tfidf_norm: Literal["l2", "l1"] = "l2"
     tfidf_use_idf: bool = True
     tfidf_sublinear_tf: bool = True
+
+    # Fusion head hyperparameters and LRs
+    fusion_projection_dim: int = 768
+    fusion_hidden_features: int = 768
+    fusion_dropout: float = 0.3
+    fusion_learning_rate: float = 1e-4
+    fusion_backbone_learning_rate: float = 5e-5
 
 
